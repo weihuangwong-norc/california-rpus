@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>California RPUs</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --background: #f8fafc;
+        --surface: #ffffff;
+        --border: #cbd5e1;
+        --text: #0f172a;
+        --muted: #475569;
+        --city: #111827;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        font-family: Arial, Helvetica, sans-serif;
+        background: var(--background);
+        color: var(--text);
+      }
+
+      main {
+        max-width: 1400px;
+        margin: 0 auto;
+        padding: 1.5rem;
+      }
+
+      h1 {
+        margin: 0 0 0.5rem;
+        font-size: clamp(1.75rem, 3vw, 2.5rem);
+      }
+
+      p {
+        margin: 0.25rem 0;
+        color: var(--muted);
+        line-height: 1.5;
+      }
+
+      .layout {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 320px;
+        gap: 1.5rem;
+        align-items: start;
+        margin-top: 1.5rem;
+      }
+
+      .panel {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
+      }
+
+      .map-panel {
+        padding: 0.75rem;
+      }
+
+      .sidebar {
+        padding: 1.25rem;
+      }
+
+      svg {
+        display: block;
+        width: 100%;
+        height: auto;
+      }
+
+      .county {
+        stroke: rgba(15, 23, 42, 0.55);
+        stroke-width: 1;
+        vector-effect: non-scaling-stroke;
+      }
+
+      .county:hover {
+        filter: brightness(1.04);
+      }
+
+      .county-label {
+        fill: #0f172a;
+        font-size: 9px;
+        font-weight: 700;
+        paint-order: stroke;
+        stroke: rgba(255, 255, 255, 0.92);
+        stroke-width: 3px;
+        stroke-linejoin: round;
+        text-anchor: middle;
+        pointer-events: none;
+      }
+
+      .city-dot {
+        fill: var(--city);
+        stroke: #ffffff;
+        stroke-width: 1.25;
+      }
+
+      .city-label {
+        fill: var(--city);
+        font-size: 11px;
+        font-weight: 700;
+        paint-order: stroke;
+        stroke: rgba(255, 255, 255, 0.95);
+        stroke-width: 3px;
+        stroke-linejoin: round;
+      }
+
+      .legend {
+        display: grid;
+        gap: 0.75rem;
+      }
+
+      .legend-item {
+        display: grid;
+        grid-template-columns: 18px 1fr;
+        gap: 0.75rem;
+        align-items: center;
+        font-size: 0.95rem;
+      }
+
+      .swatch {
+        width: 18px;
+        height: 18px;
+        border-radius: 4px;
+        border: 1px solid rgba(15, 23, 42, 0.2);
+      }
+
+      .status {
+        font-weight: 700;
+        color: var(--muted);
+      }
+
+      @media (max-width: 1100px) {
+        .layout {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>California Regional Planning Units</h1>
+      <p>
+        California counties are color coded by Regional Planning Unit (RPU), with county labels and markers for major cities.
+      </p>
+      <p class="status" id="status">Loading county boundaries…</p>
+      <section class="layout">
+        <div class="panel map-panel">
+          <svg id="map" viewBox="0 0 1000 1200" role="img" aria-labelledby="map-title map-description">
+            <title id="map-title">Map of California RPUs</title>
+            <desc id="map-description">California county boundaries labeled by county name and colored by regional planning unit, with major city markers.</desc>
+          </svg>
+        </div>
+        <aside class="panel sidebar">
+          <h2>RPU legend</h2>
+          <div class="legend" id="legend"></div>
+          <h2>Major cities</h2>
+          <p>San Francisco, San Jose, Sacramento, Oakland, Fresno, Bakersfield, Los Angeles, Long Beach, Anaheim, Riverside, San Diego, and Santa Barbara.</p>
+        </aside>
+      </section>
+    </main>
+
+    <script>
+      const rpuByCounty = {
+        "San Francisco": "Bay-Peninsula",
+        "San Mateo": "Bay-Peninsula",
+        "Santa Clara": "Bay-Peninsula",
+        Alpine: "Capital",
+        Colusa: "Capital",
+        "El Dorado": "Capital",
+        Glenn: "Capital",
+        Placer: "Capital",
+        Sacramento: "Capital",
+        Sutter: "Capital",
+        Yolo: "Capital",
+        Yuba: "Capital",
+        Alameda: "East Bay",
+        "Contra Costa": "East Bay",
+        Riverside: "Inland Empire",
+        "San Bernardino": "Inland Empire",
+        "Los Angeles": "Los Angeles",
+        Amador: "Middle Sierra",
+        Calaveras: "Middle Sierra",
+        Mariposa: "Middle Sierra",
+        Tuolumne: "Middle Sierra",
+        Lake: "North Bay",
+        Marin: "North Bay",
+        Mendocino: "North Bay",
+        Napa: "North Bay",
+        Solano: "North Bay",
+        Sonoma: "North Bay",
+        Monterey: "North Central Coast",
+        "San Benito": "North Central Coast",
+        "Santa Cruz": "North Central Coast",
+        Humboldt: "North Coast",
+        Butte: "North State",
+        "Del Norte": "North State",
+        Lassen: "North State",
+        Modoc: "North State",
+        Nevada: "North State",
+        Plumas: "North State",
+        Shasta: "North State",
+        Sierra: "North State",
+        Siskiyou: "North State",
+        Tehama: "North State",
+        Trinity: "North State",
+        Orange: "Orange",
+        Fresno: "San Joaquin Valley and Associated Counties",
+        Inyo: "San Joaquin Valley and Associated Counties",
+        Kern: "San Joaquin Valley and Associated Counties",
+        Kings: "San Joaquin Valley and Associated Counties",
+        Madera: "San Joaquin Valley and Associated Counties",
+        Merced: "San Joaquin Valley and Associated Counties",
+        Mono: "San Joaquin Valley and Associated Counties",
+        "San Joaquin": "San Joaquin Valley and Associated Counties",
+        Stanislaus: "San Joaquin Valley and Associated Counties",
+        Tulare: "San Joaquin Valley and Associated Counties",
+        "San Luis Obispo": "South Central Coast",
+        "Santa Barbara": "South Central Coast",
+        Imperial: "Southern Border",
+        "San Diego": "Southern Border",
+        Ventura: "Ventura"
+      };
+
+      const rpuColors = {
+        "Bay-Peninsula": "#4f46e5",
+        Capital: "#60a5fa",
+        "East Bay": "#0f766e",
+        "Inland Empire": "#f59e0b",
+        "Los Angeles": "#ef4444",
+        "Middle Sierra": "#8b5cf6",
+        "North Bay": "#10b981",
+        "North Central Coast": "#14b8a6",
+        "North Coast": "#22c55e",
+        "North State": "#84cc16",
+        Orange: "#fb7185",
+        "San Joaquin Valley and Associated Counties": "#f97316",
+        "South Central Coast": "#ec4899",
+        "Southern Border": "#dc2626",
+        Ventura: "#06b6d4"
+      };
+
+      const countyLabelOffsets = {
+        Alameda: [10, 0],
+        Marin: [0, -14],
+        Napa: [0, -10],
+        Orange: [18, -8],
+        Sacramento: [6, -10],
+        "San Francisco": [12, -10],
+        "San Mateo": [0, 10],
+        "Santa Clara": [16, 8],
+        "Santa Cruz": [-10, 8],
+        Solano: [14, 0],
+        Ventura: [8, -6]
+      };
+
+      const cities = [
+        { name: "San Francisco", lon: -122.4194, lat: 37.7749 },
+        { name: "Oakland", lon: -122.2711, lat: 37.8044 },
+        { name: "San Jose", lon: -121.8863, lat: 37.3382 },
+        { name: "Sacramento", lon: -121.4944, lat: 38.5816 },
+        { name: "Fresno", lon: -119.7871, lat: 36.7378 },
+        { name: "Bakersfield", lon: -119.0187, lat: 35.3733 },
+        { name: "Los Angeles", lon: -118.2437, lat: 34.0522 },
+        { name: "Long Beach", lon: -118.1937, lat: 33.7701 },
+        { name: "Anaheim", lon: -117.9143, lat: 33.8366 },
+        { name: "Riverside", lon: -117.3962, lat: 33.9806 },
+        { name: "Santa Barbara", lon: -119.6982, lat: 34.4208 },
+        { name: "San Diego", lon: -117.1611, lat: 32.7157 }
+      ];
+
+      const svg = document.getElementById("map");
+      const status = document.getElementById("status");
+      const legend = document.getElementById("legend");
+      const svgNs = "http://www.w3.org/2000/svg";
+      const width = 1000;
+      const height = 1200;
+      const padding = 50;
+
+      const append = (name, attrs, parent = svg) => {
+        const element = document.createElementNS(svgNs, name);
+        Object.entries(attrs || {}).forEach(([key, value]) => {
+          element.setAttribute(key, value);
+        });
+        parent.appendChild(element);
+        return element;
+      };
+
+      const getCoordinateSets = (geometry) =>
+        geometry.type === "Polygon" ? [geometry.coordinates] : geometry.coordinates;
+
+      const getPoints = (geometry) => {
+        const points = [];
+        getCoordinateSets(geometry).forEach((polygon) => {
+          polygon.forEach((ring) => {
+            ring.forEach((point) => points.push(point));
+          });
+        });
+        return points;
+      };
+
+      const splitLabel = (name) => {
+        const words = name.split(" ");
+        if (words.length === 1 || name.length <= 12) {
+          return [name];
+        }
+        const midpoint = Math.ceil(words.length / 2);
+        return [words.slice(0, midpoint).join(" "), words.slice(midpoint).join(" ")];
+      };
+
+      const polygonArea = (ring) => {
+        let area = 0;
+        for (let i = 0; i < ring.length - 1; i += 1) {
+          const [x1, y1] = ring[i];
+          const [x2, y2] = ring[i + 1];
+          area += x1 * y2 - x2 * y1;
+        }
+        return area / 2;
+      };
+
+      const polygonCentroid = (ring) => {
+        let areaFactor = 0;
+        let cx = 0;
+        let cy = 0;
+        for (let i = 0; i < ring.length - 1; i += 1) {
+          const [x1, y1] = ring[i];
+          const [x2, y2] = ring[i + 1];
+          const cross = x1 * y2 - x2 * y1;
+          areaFactor += cross;
+          cx += (x1 + x2) * cross;
+          cy += (y1 + y2) * cross;
+        }
+        const area = areaFactor / 2;
+        return area ? [cx / (6 * area), cy / (6 * area)] : ring[0];
+      };
+
+      fetch("./data/california-counties.geojson")
+        .then((response) => {
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+          }
+          return response.json();
+        })
+        .then((geojson) => {
+          const features = geojson.features;
+          const points = features.flatMap((feature) => getPoints(feature.geometry));
+          const averageLat = points.reduce((sum, [, lat]) => sum + lat, 0) / points.length;
+          const lonScale = Math.cos((averageLat * Math.PI) / 180);
+          const rawPoints = points.map(([lon, lat]) => [lon * lonScale, -lat]);
+          const minX = Math.min(...rawPoints.map(([x]) => x));
+          const maxX = Math.max(...rawPoints.map(([x]) => x));
+          const minY = Math.min(...rawPoints.map(([, y]) => y));
+          const maxY = Math.max(...rawPoints.map(([, y]) => y));
+          const scale = Math.min((width - padding * 2) / (maxX - minX), (height - padding * 2) / (maxY - minY));
+
+          const project = ([lon, lat]) => [padding + (lon * lonScale - minX) * scale, padding + (-lat - minY) * scale];
+          const mapLayer = append("g", { "aria-hidden": "true" });
+          const labelLayer = append("g", { "aria-hidden": "true" });
+          const cityLayer = append("g", { "aria-hidden": "true" });
+
+          features.forEach((feature) => {
+            const countyName = feature.properties.name;
+            const polygons = getCoordinateSets(feature.geometry);
+            const pathData = polygons
+              .map((polygon) =>
+                polygon
+                  .map((ring) =>
+                    ring
+                      .map((point, index) => {
+                        const [x, y] = project(point);
+                        return `${index === 0 ? "M" : "L"}${x.toFixed(2)},${y.toFixed(2)}`;
+                      })
+                      .join(" ") + " Z"
+                  )
+                  .join(" ")
+              )
+              .join(" ");
+
+            const county = append(
+              "path",
+              {
+                d: pathData,
+                class: "county",
+                fill: rpuColors[rpuByCounty[countyName]] || "#d1d5db"
+              },
+              mapLayer
+            );
+            append("title", {}, county).textContent = `${countyName}: ${rpuByCounty[countyName]}`;
+
+            let labelRing = null;
+            let largestArea = 0;
+            polygons.forEach((polygon) => {
+              const projectedOuterRing = polygon[0].map(project);
+              const area = Math.abs(polygonArea(projectedOuterRing));
+              if (area > largestArea) {
+                largestArea = area;
+                labelRing = projectedOuterRing;
+              }
+            });
+
+            const [cx, cy] = polygonCentroid(labelRing);
+            const [offsetX, offsetY] = countyLabelOffsets[countyName] || [0, 0];
+            const label = append(
+              "text",
+              {
+                class: "county-label",
+                x: (cx + offsetX).toFixed(2),
+                y: (cy + offsetY).toFixed(2)
+              },
+              labelLayer
+            );
+
+            splitLabel(countyName).forEach((line, index, lines) => {
+              const tspan = append(
+                "tspan",
+                {
+                  x: (cx + offsetX).toFixed(2),
+                  dy: index === 0 ? `${-((lines.length - 1) * 0.55)}em` : "1.1em"
+                },
+                label
+              );
+              tspan.textContent = line;
+            });
+          });
+
+          cities.forEach((city) => {
+            const [x, y] = project([city.lon, city.lat]);
+            append("circle", { class: "city-dot", cx: x.toFixed(2), cy: y.toFixed(2), r: 4 }, cityLayer);
+            const cityLabel = append("text", { class: "city-label", x: (x + 7).toFixed(2), y: (y - 7).toFixed(2) }, cityLayer);
+            cityLabel.textContent = city.name;
+          });
+
+          Object.entries(rpuColors).forEach(([name, color]) => {
+            const item = document.createElement("div");
+            item.className = "legend-item";
+            const swatch = document.createElement("span");
+            swatch.className = "swatch";
+            swatch.style.backgroundColor = color;
+            const label = document.createElement("span");
+            label.textContent = name;
+            item.append(swatch, label);
+            legend.appendChild(item);
+          });
+
+          status.textContent = `Loaded ${features.length} California counties across ${Object.keys(rpuColors).length} RPUs.`;
+        })
+        .catch((error) => {
+          status.textContent = `Unable to load the map data: ${error.message}`;
+        });
+    </script>
+  </body>
+</html>
